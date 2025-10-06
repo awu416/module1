@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bucket Budgeting Game</title>
+<style>
+  :root{
+    --bg:#f7f7fb; --card:#ffffff; --text:#222; --muted:#6b7280; --primary:#2563eb;
+    --ess:#0ea5e9;   /* Essentials: blue-cyan */
+    --sav:#16a34a;   /* Savings: green */
+    --std:#a855f7;   /* Study: purple */
+    --fun:#f97316;   /* Fun: orange */
+    --good:#16a34a; --warn:#b45309; --bad:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}
+  h1{margin:0 0 6px 0;font-size:26px}
+  p.subtitle{margin:0 0 16px 0;color:var(--muted)}
+  .tipbar{
+    display:flex;gap:10px;align-items:flex-start;background:#eef2ff;color:#1e40af;
+    border-left:6px solid var(--primary);padding:12px;border-radius:10px;margin:10px 0 18px 0
+  }
+  .wrap{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start}
+  .card{background:var(--card);border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.06);padding:16px}
+  .income-pool{display:flex;flex-wrap:wrap;gap:10px;min-height:84px}
+  .income{
+    user-select:none;border:2px solid var(--primary);border-radius:12px;padding:10px 12px;cursor:grab;
+    background:linear-gradient(180deg,#eef2ff,#e0e7ff);color:#1e40af;font-weight:700;box-shadow:0 2px 8px rgba(37,99,235,.15)
+  }
+  .income:active{cursor:grabbing;opacity:.9}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .tag{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:#f3f4f6;border-radius:999px;padding:4px 8px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .buckets{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .bucket{border:2px dashed #d1d5db;border-radius:14px;min-height:190px;padding:12px;background:#fff;transition:.2s}
+  .bucket:hover{box-shadow:0 6px 20px rgba(0,0,0,.06)}
+  .bucket h3{margin:0 0 6px 0;display:flex;align-items:center;gap:8px}
+  .bucket small{color:var(--muted)}
+  .dropzone{min-height:108px;padding:8px;border-radius:10px;background:#fafafa}
+  .totals{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+  .total{font-size:14px;color:var(--muted)}
+  .bar{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:6px}
+  .bar > span{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#2563eb)}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  button{border:0;background:var(--primary);color:#fff;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+  button.secondary{background:#e5e7eb;color:#111}
+  .result{margin-top:14px;padding:12px;border-radius:10px;background:#f1f5f9}
+  .ok{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  .footer{margin-top:8px;color:var(--muted);font-size:12px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-left:6px;background:#eef2ff;color:#1e40af}
+  /* Colored borders for buckets */
+  .b-ess{border-color:color-mix(in srgb, var(--ess) 30%, #d1d5db)}
+  .b-sav{border-color:color-mix(in srgb, var(--sav) 30%, #d1d5db)}
+  .b-std{border-color:color-mix(in srgb, var(--std) 30%, #d1d5db)}
+  .b-fun{border-color:color-mix(in srgb, var(--fun) 30%, #d1d5db)}
+  /* Progress bars per bucket */
+  #EssentialsBar{background:linear-gradient(90deg,#67e8f9,var(--ess))}
+  #SavingsBar{background:linear-gradient(90deg,#86efac,var(--sav))}
+  #StudyBar{background:linear-gradient(90deg,#d8b4fe,var(--std))}
+  #FunBar{background:linear-gradient(90deg,#fdba74,var(--fun))}
+  @media (max-width: 900px){
+    .wrap{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <h1>Bucket Budgeting Game</h1>
+  <p class="subtitle">Drag each income chip into the buckets. Click <b>Validate</b> for tips.</p>
+
+  <div class="tipbar">
+    <div>💡</div>
+    <div>
+      <b>Quick tips:</b> Essentials ≥ 50% · Savings ≥ 10% · Fun ≤ 15%. Study & Career is flexible.<br/>
+      Try to allocate <i>all</i> income and aim for a small surplus in Savings for your emergency fund.
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- LEFT: Income and actions -->
+    <div class="card">
+      <h3>Income Pool</h3>
+      <div id="incomePool" class="income-pool" ondragover="allowDrop(event)" ondrop="returnToPool(event)">
+        <div class="income" draggable="true" data-amount="600">💵 $600</div>
+        <div class="income" draggable="true" data-amount="300">💵 $300</div>
+        <div class="income" draggable="true" data-amount="200">💵 $200</div>
+        <div class="income" draggable="true" data-amount="100">💵 $100</div>
+        <div class="income" draggable="true" data-amount="100">💵 $100</div>
+        <div class="income" draggable="true" data-amount="50">💵 $50</div>
+        <div class="income" draggable="true" data-amount="50">💵 $50</div>
+      </div>
+
+      <div class="totals">
+        <div class="total">Total Income: <b id="totalIncome">$0</b></div>
+        <div class="total">Unallocated: <b id="unallocated">$0</b></div>
+      </div>
+      <div class="bar"><span id="allocBar" style="width:0%"></span></div>
+
+      <div class="legend">
+        <span class="tag"><span class="dot" style="background:var(--ess)"></span>🏠 Essentials</span>
+        <span class="tag"><span class="dot" style="background:var(--sav)"></span>🐷 Savings</span>
+        <span class="tag"><span class="dot" style="background:var(--std)"></span>🎓 Study</span>
+        <span class="tag"><span class="dot" style="background:var(--fun)"></span>🎉 Fun</span>
+      </div>
+
+      <div class="controls">
+        <button onclick="validate()">Validate</button>
+        <button class="secondary" onclick="resetAll()">Reset</button>
+      </div>
+      <div class="result" id="validation"></div>
+      <div class="footer">Drag chips into buckets, then press <b>Validate</b> for personalized tips.</div>
+    </div>
+
+    <!-- RIGHT: Buckets -->
+    <div class="buckets">
+      <div class="card bucket b-ess" data-bucket="Essentials" ondragover="allowDrop(event)" ondrop="drop(event)">
+        <h3>🏠 Essentials <span class="pill">target ≥ 50%</span></h3>
+        <small>Rent, groceries, transport, utilities</small>
+        <div class="dropzone"></div>
+        <div class="total">Total: <b id="EssentialsTotal">$0</b> (<span id="EssentialsPct">0%</span>)</div>
+        <div class="bar"><span id="EssentialsBar" style="width:0%"></span></div>
+      </div>
+
+      <div class="card bucket b-sav" data-bucket="Savings" ondragover="allowDrop(event)" ondrop="drop(event)">
+        <h3>🐷 Savings <span class="pill">target ≥ 10%</span></h3>
+        <small>Emergency fund, future plans</small>
+        <div class="dropzone"></div>
+        <div class="total">Total: <b id="SavingsTotal">$0</b> (<span id="SavingsPct">0%</span>)</div>
+        <div class="bar"><span id="SavingsBar" style="width:0%"></span></div>
+      </div>
+
+      <div class="card bucket b-std" data-bucket="Study" ondragover="allowDrop(event)" ondrop="drop(event)">
+        <h3>🎓 Study & Career</h3>
+        <small>Textbooks, software, events</small>
+        <div class="dropzone"></div>
+        <div class="total">Total: <b id="StudyTotal">$0</b> (<span id="StudyPct">0%</span>)</div>
+        <div class="bar"><span id="StudyBar" style="width:0%"></span></div>
+      </div>
+
+      <div class="card bucket b-fun" data-bucket="Fun" ondragover="allowDrop(event)" ondrop="drop(event)">
+        <h3>🎉 Fun <span class="pill">target ≤ 15%</span></h3>
+        <small>Dining out, hobbies, events</small>
+        <div class="dropzone"></div>
+        <div class="total">Total: <b id="FunTotal">$0</b> (<span id="FunPct">0%</span>)</div>
+        <div class="bar"><span id="FunBar" style="width:0%"></span></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let dragSrc = null;
+
+  function currency(n){ return "$" + n.toFixed(0); }
+  function allowDrop(ev){ ev.preventDefault(); }
+
+  // make income chips draggable
+  function wireDrags(scope=document){
+    scope.querySelectorAll(".income").forEach(el=>{
+      el.addEventListener("dragstart", e=>{
+        dragSrc = e.target;
+        e.dataTransfer.setData("text/plain","x"); // required for Firefox
+      });
+    });
+  }
+  wireDrags();
+
+  function drop(ev){
+    ev.preventDefault();
+    if(!dragSrc) return;
+    const dz = ev.currentTarget.querySelector(".dropzone");
+    dz.appendChild(dragSrc);
+    updateTotals();
+  }
+
+  function returnToPool(ev){
+    ev.preventDefault();
+    if(!dragSrc) return;
+    document.getElementById("incomePool").appendChild(dragSrc);
+    updateTotals();
+  }
+
+  function resetAll(){
+    const pool = document.getElementById("incomePool");
+    document.querySelectorAll(".income").forEach(chip=> pool.appendChild(chip));
+    document.getElementById("validation").innerHTML = "";
+    updateTotals();
+  }
+
+  function sumIn(el){
+    let s = 0;
+    el.querySelectorAll(".income").forEach(i=> s += Number(i.dataset.amount));
+    return s;
+  }
+
+  function updateTotals(){
+    // total = sum of all chips (pool + buckets)
+    const total = sumIn(document.body);
+    const poolSum = sumIn(document.getElementById("incomePool"));
+    const unalloc = poolSum;
+
+    document.getElementById("totalIncome").textContent = currency(total);
+    const allocated = (total - unalloc);
+    document.getElementById("unallocated").textContent = currency(unalloc);
+    document.getElementById("allocBar").style.width = (allocated / (total || 1) * 100) + "%";
+
+    ["Essentials","Savings","Study","Fun"].forEach(name=>{
+      const bucket = document.querySelector(`.bucket[data-bucket='${name}'] .dropzone`);
+      const s = sumIn(bucket);
+      const pct = (s / (total || 1)) * 100;
+      document.getElementById(name+"Total").textContent = currency(s);
+      document.getElementById(name+"Pct").textContent = Math.round(pct) + "%";
+      document.getElementById(name+"Bar").style.width = pct + "%";
+    });
+  }
+
+  function validate(){
+    const total = sumIn(document.body);
+    const essentials = sumIn(document.querySelector(".bucket[data-bucket='Essentials'] .dropzone"));
+    const savings = sumIn(document.querySelector(".bucket[data-bucket='Savings'] .dropzone"));
+    const fun = sumIn(document.querySelector(".bucket[data-bucket='Fun'] .dropzone"));
+    const unalloc = sumIn(document.getElementById("incomePool"));
+
+    const ePct = essentials/(total||1)*100;
+    const sPct = savings/(total||1)*100;
+    const fPct = fun/(total||1)*100;
+
+    let msgs = [];
+
+    // Headline status
+    if(unalloc>0){
+      msgs.push(`ℹ️ You still have <b>${currency(unalloc)}</b> unallocated. Drag the remaining chips into buckets.`);
+    }else{
+      msgs.push(`🎯 All income allocated. Nice!`);
+    }
+
+    // Essentials rule
+    if(ePct >= 50){
+      msgs.push(`✅ <span class="ok">Essentials</span> is ${Math.round(ePct)}% (meets ≥ 50%).`);
+    }else{
+      msgs.push(`⚠️ <span class="bad">Essentials</span> is ${Math.round(ePct)}% (recommend ≥ 50%). Consider moving more here to cover rent, food & bills.`);
+      msgs.push(`💡 Tip: Start by listing fixed bills first, then allocate what's left to other buckets.`);
+    }
+
+    // Savings rule
+    if(sPct >= 10){
+      msgs.push(`✅ <span class="ok">Savings</span> is ${Math.round(sPct)}% (meets ≥ 10%).`);
+    }else{
+      msgs.push(`💡 <span class="warn">Savings</span> is ${Math.round(sPct)}% (recommend ≥ 10%). Try boosting your emergency fund / future goals.`);
+      msgs.push(`🐷 Tip: Automate a small weekly transfer (e.g., $10–$20) to grow consistency.`);
+    }
+
+    // Fun rule
+    if(fPct <= 15){
+      msgs.push(`✅ <span class="ok">Fun</span> is ${Math.round(fPct)}% (within ≤ 15%).`);
+    }else{
+      msgs.push(`⚠️ <span class="bad">Fun</span> is ${Math.round(fPct)}% (recommend ≤ 15%). Dial back non-essentials to stay on track.`);
+      msgs.push(`🎯 Tip: Set a weekly Fun cap and track it in your banking app to avoid overshoot.`);
+    }
+
+    // Friendly close-out nudge
+    msgs.push(`📝 Reminder: Review your buckets monthly and tweak as your goals or costs change.`);
+
+    document.getElementById("validation").innerHTML = msgs.join("<br>");
+  }
+
+  // initial render
+  updateTotals();
+</script>
+</body>
+</html>
+
